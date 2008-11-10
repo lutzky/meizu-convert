@@ -74,9 +74,9 @@ vrc_buf_size=1835
 common="-idx -noodml -force-avi-aspect 1.3333 -msglevel mencoder=1 -ofps $fps -ovc lavc -ffourcc XVID"
 
 if [[ "$color" = "on" ]]; then
-RED=$(tput setaf 1;tput setab 0)
-GREEN=$(tput setaf 2;tput setab 0)
-BLUE=$(tput setaf 6;tput setab 0)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+BLUE=$(tput setaf 6)
 NORM=$(tput sgr0)
 fi
 
