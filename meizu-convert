@@ -1,0 +1,207 @@
+#!/bin/bash
+#
+#       Redistribution and use in source and binary forms, with or without
+#       modification, are permitted provided that the following conditions are
+#       met:
+#       
+#       * Redistributions of source code must retain the above copyright
+#         notice, this list of conditions and the following disclaimer.
+#       * Redistributions in binary form must reproduce the above
+#         copyright notice, this list of conditions and the following disclaimer
+#         in the documentation and/or other materials provided with the
+#         distribution.
+#       * Neither the name of the  nor the names of its
+#         contributors may be used to endorse or promote products derived from
+#         this software without specific prior written permission.
+#       
+#       THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+#       "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#       LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+#       A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#       OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#       SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#       LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+#       DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+#       THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+#       OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#       Copyleft 2007 wishmechaos
+
+#    Version 0.1, 21-oct-07
+#    Version 0.2, 22-oct-07, Added ratio autodetect (requires ffmpeg),
+#     small subtitle fix. Routine from 
+#     http://tuxicity.wordpress.com/2006/12/01/avi-to-dvd-with-ffmpeg-and-dvdauthor/
+#    Version 0.2.1, 12-feb-08, Fixed small bug when filename has spaces.
+#    Version 0.3, 1-mar-08, Tuned mencoder parameters.
+#    Version 0.3.1, 8-apr-08, Added color for messages. Warn if conversion fails.
+#     Warn is ffmpeg/mencoder is not installed or failed.
+
+# For debugging purposes
+# set -x
+
+### Defaults
+# Frames per second (15-20)
+fps=20
+
+# Two pass encoding, takes longer, better quality
+# yes / no
+twopass=yes
+
+# Crop settings.
+# "auto" will try to detect if the source video is 4:3 or 16:9
+#  and leave that intact.
+# "yes" will leave 4:3 videos as they are, and will crop 16:9
+#  videos in order to take up all of the screen.
+crop="auto"
+
+# Turn colored messages on/off.
+color=on
+
+# Video bitrate
+vbitrate=350
+# Audio bitrate
+abitrate=112
+# Sample rate
+srate=44100
+# Maximum Bitrate allowed
+vrc_maxrate=460
+# Buffer size
+vrc_buf_size=1835
+### End defaults
+
+# Some common options
+common="-idx -noodml -force-avi-aspect 1.3333 -msglevel mencoder=1 -ofps $fps -ovc lavc -ffourcc XVID"
+
+if [[ "$color" = "on" ]]; then
+RED=$(tput setaf 1;tput setab 0)
+GREEN=$(tput setaf 2;tput setab 0)
+BLUE=$(tput setaf 6;tput setab 0)
+NORM=$(tput sgr0)
+fi
+
+show_help() {
+    echo "Usage: `basename "$0"` [options] file1.avi [file2.avi...]
+    Options are
+    -h (show this)
+    -c (crop) auto|yes
+    -p (two-pass) yes|no
+    -f (fps) 15-20
+    -v (video bitrate) number
+    -a (audio bitrate) number
+    Subtitles are automatically loaded if their filename is the same as the movie file."
+    exit 1
+}
+
+if ! hash mencoder 2>/dev/null; then
+echo "    ${RED}Couldn't find mencoder. Please install it.${NORM}
+    ${BLUE}In Debian/Ubuntu, type \"sudo apt-get install mencoder\"${NORM}"
+exit 1
+fi
+
+# find subtitles with same filename
+findsubs() {
+    echo "    ${BLUE}Searching for subtitles.${NORM}"    
+    for possiblefile in "$filename"*; do
+        case $possiblefile in
+            *.sub) subfile="$possiblefile";;
+            *.srt) subfile="$possiblefile";;
+        esac
+    done
+    if test -n "$subfile"; then
+        echo "    ${GREEN}Found \"$subfile\"${NORM}"
+        subs=(-noautoexpand -subpos 95 -subfont-autoscale 3 -subfont-outline 1 -subcp enca -sub "$subfile")
+    else
+    echo "    ${BLUE}No subtitles found.${NORM}"
+    fi
+}
+
+aspectdetect() {
+    if ! hash ffmpeg 2>/dev/null; then
+    echo "    ${RED}Couldn't find ffmpeg. Please install it.${NORM}
+    ${BLUE}In Debian/Ubuntu, type \"sudo apt-get install ffmpeg\"${NORM}"
+    exit 1
+    fi    
+
+    aspect=$(( $(ffmpeg -i "$moviefile" 2>&1 | grep "Stream\ #0.0" | sed "s/.* \([1-9][0-9]*\)x\([0-9]*\).*/\10000 \/ \2/") ))
+    if [[ $aspect -eq 0 ]]; then
+    echo "    ${RED}Either ffmpeg is not working correctly or it couldn't stat your video file.${NORM}"
+    echo "    ${RED}I'm assuming that crop=yes for this file${NORM}"
+        vf="scale=-2:240,crop=320:240,expand=320:240:::1"
+    elif [[ $aspect -lt 15555 ]]; then
+        # 4:3
+        echo "    ${GREEN}\"$moviefile\" appears to be 4:3${NORM}"
+        vf="scale=-2:240,crop=320:240,expand=320:240:::1"
+    else
+        # 16:9
+        echo "    ${GREEN}\"$moviefile\" appears to be Widescreen${NORM}"
+        vf="scale=320:-2,crop=320:240,expand=320:240:::1"
+    fi
+}
+
+return_error() {
+    echo "${RED}    Mencoder failed for some reason. Check your logs.${NORM}"
+    cleanUp
+}
+
+convert() {
+    case $crop in
+        auto) aspectdetect;;
+        yes) vf="scale=-2:240,crop=320:240,expand=320:240:::1"
+    esac
+    
+    if [[ "$twopass" == "no" ]]; then
+        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+    else
+        #pass 1
+        mencoder -nosound -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:vpass=1:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:turbo -sws 9 -o "$filename.meizu.avi" || return_error
+        #pass 2
+        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vpass=2:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+        rm divx2pass.log
+    fi
+
+    echo "${GREEN}    Finished converting $moviefile ${NORM}"
+}
+
+cleanUp() {
+    echo "    ${RED}Deleting temporary files.${NORM}"    
+    rm "$filename.meizu.avi" >/dev/null 2>&1
+    rm divx2pass.log >/dev/null 2>&1
+    exit 1
+}
+trap cleanUp INT
+
+# If there're no arguments
+if [ $# = 0 ]; then show_help; fi
+
+# Parse arguments
+x=1         # Avoids an error if we get no options at all.
+while getopts "hc:pf:" opt; do
+    case "$opt" in
+        h|\?) show_help;;
+        c) crop="$OPTARG";;
+        p) twopass="$OPTARG";;
+        f) fps="$OPTARG";;
+        a) abitrate="$OPTARG";;
+        v) vbitrate="$OPTARG";;
+    esac
+    x=$OPTIND
+done
+shift $((x-1))
+
+for moviefile in "$@"; do
+    if [[ -f "$moviefile" ]]; then
+        echo "    ${BLUE}Moviefile is \"$moviefile\"${NORM}"
+        extension=".${moviefile##*.}"
+        echo "    ${BLUE}Extension is $extension${NORM}"
+        filename="`basename "$moviefile" "$extension"`"
+        echo "    ${BLUE}Filename is therefore \""$filename"\"${NORM}"
+        # ugly way to do it, works though.
+        if [[ "$moviefile" != "${moviefile%/*}" ]]; then cd "${moviefile%/*}"; fi
+        findsubs
+        echo "    ${GREEN}Converting \"$moviefile\"${NORM}"
+        convert
+    else
+        echo "    ${RED}\""$moviefile"\" doesn't exist.${NORM}"
+    fi
+done
