@@ -80,6 +80,9 @@ BLUE=$(tput setaf 6)
 NORM=$(tput sgr0)
 fi
 
+ostream="/dev/null"
+errstream="/dev/null"
+
 show_help() {
     echo "Usage: `basename "$0"` [options] file1.avi [file2.avi...]
     Options are
@@ -89,6 +92,7 @@ show_help() {
     -f (fps) 15-20
     -v (video bitrate) number
     -a (audio bitrate) number
+    -t (talkative, verbose)
     Subtitles are automatically loaded if their filename is the same as the movie file."
     exit 1
 }
@@ -149,14 +153,14 @@ convert() {
         auto) aspectdetect;;
         yes) vf="scale=-2:240,crop=320:240,expand=320:240:::1"
     esac
-    
+
     if [[ "$twopass" == "no" ]]; then
-	    mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+            mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" > $ostream 2> $errstream || return_error
     else
         #pass 1
-        mencoder -nosound -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:vpass=1:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:turbo -sws 9 -o "$filename.meizu.avi" || return_error
+        mencoder -nosound -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:vpass=1:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:turbo -sws 9 -o "$filename.meizu.avi" $quiet > $ostream 2> $errstream || return_error
         #pass 2
-        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vpass=2:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vpass=2:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" > $ostream 2> $errstream || return_error
         rm divx2pass.log
     fi
 
@@ -177,7 +181,7 @@ if [ $# = 0 ]; then show_help; fi
 
 # Parse arguments
 x=1         # Avoids an error if we get no options at all.
-while getopts "hc:pf:" opt; do
+while getopts "htc:pf:" opt; do
     case "$opt" in
         h|\?) show_help;;
         c) crop="$OPTARG";;
@@ -185,6 +189,7 @@ while getopts "hc:pf:" opt; do
         f) fps="$OPTARG";;
         a) abitrate="$OPTARG";;
         v) vbitrate="$OPTARG";;
+        t) ostream="/dev/stdout"; errstream="/dev/stderr";;
     esac
     x=$OPTIND
 done
@@ -194,22 +199,23 @@ for moviepath in "$@"; do
     if [[ -f "$moviepath" ]]; then
         TEMPDIR=`mktemp -d`
         ln -s `readlink -e $moviepath` $TEMPDIR
-        pushd $TEMPDIR
+        echo "    ${BLUE}Performing conversion in $TEMPDIR${NORM}"
+        pushd $TEMPDIR > /dev/null
         echo "    ${BLUE}Moviepath is \"$moviepath\"${NORM}"
         extension=".${moviepath##*.}"
         echo "    ${BLUE}Extension is $extension${NORM}"
         filename="`basename "$moviepath" "$extension"`"
         echo "    ${BLUE}Filename is therefore \""$filename"\"${NORM}"
-	moviefile="`basename "$moviepath"`"
+        moviefile="`basename "$moviepath"`"
         echo "    ${BLUE}Moviefile is therefore \""$moviefile"\"${NORM}"
 
-        pushd "`dirname "$moviepath"`";
+        pushd "`dirname "$moviepath"`" > /dev/null
         findsubs;
-        popd;
+        popd > /dev/null
 
         echo "    ${GREEN}Converting \"$moviepath\"${NORM}"
         convert
-        popd
+        popd > /dev/null
         mv $TEMPDIR/$filename.meizu.avi .
         rm -rf $TEMPDIR
     else
