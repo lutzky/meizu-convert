@@ -151,12 +151,12 @@ convert() {
     esac
     
     if [[ "$twopass" == "no" ]]; then
-	    mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "`basename $moviefile`" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+	    mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
     else
         #pass 1
-        mencoder -nosound -vf softskip,$vf,rotate=1 "`basename $moviefile`" $common -lavcopts threads=8:vcodec=mpeg4:vpass=1:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:turbo -sws 9 -o "$filename.meizu.avi" || return_error
+        mencoder -nosound -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:vpass=1:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:turbo -sws 9 -o "$filename.meizu.avi" || return_error
         #pass 2
-        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "`basename $moviefile`" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vpass=2:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
+        mencoder "${subs[@]}" -vf softskip,$vf,rotate=1 "$moviefile" $common -lavcopts threads=8:vcodec=mpeg4:mbd=2:trell:vpass=2:vbitrate=$vbitrate:vrc_maxrate=$vrc_maxrate:vrc_buf_size=$vrc_buf_size:vmax_b_frames=0:vhq:acodec=libmp3lame:abitrate=$abitrate:keyint=100:sc_factor=5 -sws 9 -srate $srate -oac lavc -af volnorm,delay=230:230 -o "$filename.meizu.avi" || return_error
         rm divx2pass.log
     fi
 
@@ -190,27 +190,29 @@ while getopts "hc:pf:" opt; do
 done
 shift $((x-1))
 
-for moviefile in "$@"; do
-    if [[ -f "$moviefile" ]]; then
+for moviepath in "$@"; do
+    if [[ -f "$moviepath" ]]; then
         TEMPDIR=`mktemp -d`
-        ln -s `readlink -e $moviefile` $TEMPDIR
+        ln -s `readlink -e $moviepath` $TEMPDIR
         pushd $TEMPDIR
-        echo "    ${BLUE}Moviefile is \"$moviefile\"${NORM}"
-        extension=".${moviefile##*.}"
+        echo "    ${BLUE}Moviepath is \"$moviepath\"${NORM}"
+        extension=".${moviepath##*.}"
         echo "    ${BLUE}Extension is $extension${NORM}"
-        filename="`basename "$moviefile" "$extension"`"
+        filename="`basename "$moviepath" "$extension"`"
         echo "    ${BLUE}Filename is therefore \""$filename"\"${NORM}"
+	moviefile="`basename "$moviepath"`"
+        echo "    ${BLUE}Moviefile is therefore \""$moviefile"\"${NORM}"
 
-        pushd "${moviefile%/*}";
+        pushd "`dirname "$moviepath"`";
         findsubs;
         popd;
 
-        echo "    ${GREEN}Converting \"$moviefile\"${NORM}"
+        echo "    ${GREEN}Converting \"$moviepath\"${NORM}"
         convert
         popd
         mv $TEMPDIR/$filename.meizu.avi .
         rm -rf $TEMPDIR
     else
-        echo "    ${RED}\""$moviefile"\" doesn't exist.${NORM}"
+        echo "    ${RED}\""$moviepath"\" doesn't exist.${NORM}"
     fi
 done
