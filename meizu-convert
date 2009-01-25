@@ -170,8 +170,8 @@ convert() {
 cleanUp() {
     echo "    ${RED}Deleting temporary files.${NORM}"    
     rm "$filename.meizu.avi" >/dev/null 2>&1
-    rm -rf $TEMPDIR
-    rm divx2pass.log >/dev/null 2>&1
+    echo "    ${GREEN}See your logs at $TEMPDIR${NORM}"
+    echo "    Also, see divx2pass.log"
     exit 1
 }
 trap cleanUp INT
