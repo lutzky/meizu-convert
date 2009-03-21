@@ -198,7 +198,7 @@ shift $((x-1))
 for moviepath in "$@"; do
     if [[ -f "$moviepath" ]]; then
         TEMPDIR=`mktemp -d`
-        ln -s `readlink -e $moviepath` $TEMPDIR
+        ln -s "$(readlink -e "$moviepath")" $TEMPDIR
         echo "    ${BLUE}Performing conversion in $TEMPDIR${NORM}"
         pushd $TEMPDIR > /dev/null
         echo "    ${BLUE}Moviepath is \"$moviepath\"${NORM}"
@@ -216,7 +216,7 @@ for moviepath in "$@"; do
         echo "    ${GREEN}Converting \"$moviepath\"${NORM}"
         convert
         popd > /dev/null
-        mv $TEMPDIR/$filename.meizu.avi .
+        mv "$TEMPDIR/$filename.meizu.avi" .
         rm -rf $TEMPDIR
     else
         echo "    ${RED}\""$moviepath"\" doesn't exist.${NORM}"
