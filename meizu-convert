@@ -127,7 +127,7 @@ aspectdetect() {
     exit 1
     fi    
 
-    aspect=$(( $(ffmpeg -i "$moviefile" 2>&1 | grep "Stream\ #\d\+.\d\+: Video" | sed "s/.* \([1-9][0-9]*\)x\([0-9]*\).*/\10000 \/ \2/") ))
+    aspect=$(( $(ffmpeg -i "$moviefile" 2>&1 | grep "Stream\ #[0-9]\+.[0-9]\+: Video" | sed "s/.* \([1-9][0-9]*\)x\([0-9]*\).*/\10000 \/ \2/") ))
     if [[ $aspect -eq 0 ]]; then
     echo "    ${RED}Either ffmpeg is not working correctly or it couldn't stat your video file.${NORM}"
     echo "    ${RED}I'm assuming that crop=yes for this file${NORM}"
